@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import os
+import subprocess
 import sys
 
 import batch_requests
 
-from setuptools import setup
 from setuptools import setup, Command
 
 class PyTest(Command):
@@ -21,8 +21,6 @@ class PyTest(Command):
         pass
 
     def run(self):
-        import subprocess
-        import sys
         errno = subprocess.call('py.test --cov-report html --cov batch_requests tests/', shell=True)
         raise SystemExit(errno)
 

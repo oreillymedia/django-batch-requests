@@ -1,12 +1,15 @@
 '''
 @author: rahul
 '''
-import json
+from __future__ import unicode_literals
 
+import json
+from time import sleep
+
+import six
 from django.http.response import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
-from time import sleep
 
 
 class SimpleView(View):
@@ -35,7 +38,10 @@ class SimpleView(View):
         '''
         # Imaginary current view of data.
         data = {"method": "PUT", "status": 202, "text": "Updated"}
-        data.update(json.loads(request.body))
+        body = request.body
+        if isinstance(body, six.binary_type):
+            body = body.decode("utf-8")
+        data.update(json.loads(body))
         return HttpResponse(status=202, content=json.dumps(data))
 
     def patch(self, request):
@@ -44,7 +50,10 @@ class SimpleView(View):
         '''
         # Imaginary current view of data.
         data = {"method": "PUT", "status": 202, "text": "Updated"}
-        data.update(json.loads(request.body))
+        body = request.body
+        if isinstance(body, six.binary_type):
+            body = body.decode("utf-8")
+        data.update(json.loads(body))
         return HttpResponse(status=202, content=json.dumps(data))
 
     def delete(self, request):

@@ -5,6 +5,7 @@ Created on Dec 30, 2014
 
 @summary: Holds exception required for batch_requests app.
 '''
+from __future__ import unicode_literals
 
 
 class BadBatchRequest(Exception):

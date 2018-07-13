@@ -3,11 +3,15 @@
 
 @summary: Test cases for configured settings.
 '''
+from __future__ import absolute_import, unicode_literals
+
 import json
 
 from django.conf import settings
-from batch_requests.settings import br_settings
 from django.test import TestCase
+
+from batch_requests.settings import br_settings
+from . import ensure_text_content
 
 
 class TestSettings(TestCase):
@@ -33,7 +37,7 @@ class TestSettings(TestCase):
 
         # Assert we get a bad request.
         self.assertEqual(batch_requests.status_code, 400, "MAX_LIMIT setting not working.")
-        self.assertTrue(batch_requests.content.lower().startswith("you can batch maximum of"))
+        self.assertTrue(batch_requests.content.lower().startswith(b"you can batch maximum of"))
 
     def test_custom_header(self):
         '''
@@ -44,8 +48,9 @@ class TestSettings(TestCase):
         value = "custom value"
 
         # Make a batch request querying for that particular header.
-        batch_req = self._make_a_batch_request("get", "/echo/?header=HTTP_%s" % (header), "", headers={header: value})
-        batch_resp = json.loads(batch_req.content)[0]
+        batch_req = self._make_a_batch_request(
+            "get", "/echo/?header=HTTP_%s" % (header), "", headers={header: value})
+        batch_resp = json.loads(batch_req.content.decode("utf-8"))[0]
 
         self.assertEqual(batch_resp['body'], value, "Custom header not working")
 
@@ -58,8 +63,9 @@ class TestSettings(TestCase):
         value = "https"
 
         # Make a batch request querying for that particular header.
-        batch_req = self._make_a_batch_request("get", "/echo/?header=%s" % (header), "", headers={})
-        batch_resp = json.loads(batch_req.content)[0]
+        batch_req = self._make_a_batch_request(
+            "get", "/echo/?header=%s" % (header), "", headers={})
+        batch_resp = json.loads(batch_req.content.decode("utf-8"))[0]
 
         self.assertEqual(batch_resp['body'], value, "Custom header not working")
 
@@ -75,7 +81,7 @@ class TestSettings(TestCase):
 
         # Make a batch request querying for that particular header.
         batch_req = self._make_a_batch_request("post", "/echo/?header=%s" % (header), data, headers={})
-        batch_resp = json.loads(batch_req.content)[0]
+        batch_resp = json.loads(batch_req.text)[0]
 
         self.assertEqual(batch_resp['body'], value, "Default content type not working.")
 
@@ -93,25 +99,40 @@ class TestSettings(TestCase):
         self.assertIn(br_settings.DURATION_HEADER_NAME, batch_requests._headers,
                       "Enclosing batch request does not contain duration header.")
 
-        self.assertIn(br_settings.DURATION_HEADER_NAME, json.loads(batch_requests.content)[0]['headers'],
+        self.assertIn(br_settings.DURATION_HEADER_NAME, json.loads(batch_requests.text)[0]['headers'],
                       "Individual batch request does not contain duration header.")
 
     def _batch_request(self, method, path, data, headers={}):
         '''
             Prepares a batch request.
         '''
-        return {"url": path, "method": method, "headers": headers, "body": data}
+        return {
+            "url": path,
+            "method": method,
+            "headers": headers,
+            "body": data
+        }
 
     def _make_a_batch_request(self, method, url, body, headers={}):
         '''
             Makes a batch request using django client.
         '''
-        return self.client.post("/api/v1/batch/", json.dumps([self._batch_request(method, url, body, headers)]),
-                                content_type="application/json")
+        return ensure_text_content(self.client.post(
+            "/api/v1/batch/",
+            json.dumps([self._batch_request(method, url, body, headers)]),
+            content_type="application/json"
+        ))
 
     def _make_multiple_batch_request(self, requests):
         '''
             Makes multiple batch request using django client.
         '''
-        batch_requests = [self._batch_request(method, path, data, headers) for method, path, data, headers in requests]
-        return self.client.post("/api/v1/batch/", json.dumps(batch_requests), content_type="application/json")
+        batch_requests = [
+            self._batch_request(method, path, data, headers)
+            for method, path, data, headers in requests
+        ]
+        return ensure_text_content(self.client.post(
+            "/api/v1/batch/",
+            json.dumps(batch_requests),
+            content_type="application/json"
+        ))

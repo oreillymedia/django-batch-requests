@@ -3,8 +3,20 @@
 
 @summary: Holds all the utilities functions required to support batch_requests.
 '''
+from __future__ import absolute_import, unicode_literals
+
+import six
 from django.test.client import RequestFactory, FakePayload
+
 from batch_requests.settings import br_settings as _settings
+
+
+# Standard WSGI supported headers
+WSGI_HEADERS = {
+    "CONTENT_LENGTH", "CONTENT_TYPE", "QUERY_STRING", "REMOTE_ADDR",
+    "REMOTE_HOST", "REMOTE_USER", "REQUEST_METHOD", "SERVER_NAME",
+    "SERVER_PORT",
+}
 
 
 class BatchRequestFactory(RequestFactory):
@@ -44,63 +56,40 @@ class BatchRequestFactory(RequestFactory):
         return environ
 
 
-def pre_process_method_headers(method, headers):
-    '''
-        Returns the lowered method.
-        Capitalize headers, prepend HTTP_ and change - to _.
-    '''
-    method = method.lower()
-
-    # Standard WSGI supported headers
-    _wsgi_headers = ["content_length", "content_type", "query_string",
-                     "remote_addr", "remote_host", "remote_user",
-                     "request_method", "server_name", "server_port"]
-
-    _transformed_headers = {}
-
-    # For every header, replace - to _, prepend http_ if necessary and convert
-    # to upper case.
-    for header, value in headers.items():
-
-        header = header.replace("-", "_")
-        header = "http_{header}".format(
-            header=header) if header.lower() not in _wsgi_headers else header
-        _transformed_headers.update({header.upper(): value})
-
-    return method, _transformed_headers
-
-
-def headers_to_include_from_request(curr_request):
-    '''
-        Define headers that needs to be included from the current request.
-    '''
-    return {
-        h: v for h, v in curr_request.META.items() if h in _settings.HEADERS_TO_INCLUDE}
-
-
-def get_wsgi_request_object(curr_request, method, url, headers, body):
+def get_wsgi_request_object(
+    curr_request, method, url, headers, body,
+    REQUEST_FACTORY=BatchRequestFactory()  # purposefully using a shared instance
+):
     '''
         Based on the given request parameters, constructs and returns the WSGI request object.
     '''
-    x_headers = headers_to_include_from_request(curr_request)
-    method, t_headers = pre_process_method_headers(method, headers)
+    def transform_header(header, _wsgi_headers=WSGI_HEADERS):
+        """Transform headers, if necessary
 
-    # Add default content type.
-    if "CONTENT_TYPE" not in t_headers:
-        t_headers.update({"CONTENT_TYPE": _settings.DEFAULT_CONTENT_TYPE})
+        For every header, replace - to _, prepend http_ if necessary and
+        convert to upper case.
+        """
+        header = header.replace("-", "_").upper()
+        if header not in _wsgi_headers:
+            header = "HTTP_{header}".format(header=header)
+        return header
+
+    t_headers = {"CONTENT_TYPE": _settings.DEFAULT_CONTENT_TYPE}
+    t_headers.update({
+        transform_header(h): v for h, v in six.iteritems(headers)
+    })
 
     # Override existing batch requests headers with the new headers passed for this request.
+    x_headers = {
+        h: v for h, v in six.iteritems(curr_request.META)
+        if h in _settings.HEADERS_TO_INCLUDE
+    }
     x_headers.update(t_headers)
 
-    content_type = x_headers.get("CONTENT_TYPE", _settings.DEFAULT_CONTENT_TYPE)
-
-    # Get hold of request factory to construct the request.
-    _request_factory = BatchRequestFactory()
-    _request_provider = getattr(_request_factory, method)
-
-    secure = _settings.USE_HTTPS
-
-    request = _request_provider(url, data=body, secure=secure,
-                                content_type=content_type, **x_headers)
-
-    return request
+    return getattr(REQUEST_FACTORY, method.lower())(
+        url,
+        data=body,
+        secure=_settings.USE_HTTPS,
+        content_type=x_headers.get("CONTENT_TYPE", _settings.DEFAULT_CONTENT_TYPE),
+        **x_headers
+    )

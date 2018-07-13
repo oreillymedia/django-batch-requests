@@ -3,10 +3,12 @@
 
 @summary: Contains base test case for concurrency related tests.
 '''
+from __future__ import absolute_import, unicode_literals
+
 import json
 
+from batch_requests.settings import br_settings as _settings
 from tests.test_base import TestBase
-from batch_requests.settings import br_settings
 
 
 class TestBaseConcurrency(TestBase):
@@ -19,11 +21,11 @@ class TestBaseConcurrency(TestBase):
             Change the concurrency settings.
         '''
         self.number_workers = 10
-        self.orig_executor = br_settings.executor
+        self.orig_executor = _settings.executor
 
     def tearDown(self):
         # Restore the original batch requests settings.
-        br_settings.executor = self.orig_executor
+        _settings.executor = self.orig_executor
 
     def compare_seq_and_concurrent_req(self):
         '''
@@ -42,14 +44,22 @@ class TestBaseConcurrency(TestBase):
 
         # FIXME: Find the better way to manage / update settings.
         # Update the settings.
-        br_settings.executor = self.get_executor()
+        _settings.executor = self.get_executor()
         threaded_batch_requests = self.make_multiple_batch_request([get_req, post_req, put_req])
 
-        seq_responses = json.loads(batch_requests.content)
-        conc_responses = json.loads(threaded_batch_requests.content)
+        seq_responses = json.loads(batch_requests.content.decode("utf-8"))
+        conc_responses = json.loads(threaded_batch_requests.content.decode("utf-8"))
 
         for idx, seq_resp in enumerate(seq_responses):
-            self.assertDictEqual(seq_resp, conc_responses[idx], "Sequential and concurrent response not same!")
+            conc_resp = conc_responses[idx]
+
+            # durations are now more finegrained, compare them separately
+            conc_duration = conc_resp["headers"].pop(_settings.DURATION_HEADER_NAME)
+            seq_duration = seq_resp["headers"].pop(_settings.DURATION_HEADER_NAME)
+
+            # using 10ms as a current error bounds on durations
+            assert abs(float(conc_duration) - float(seq_duration)) <= 0.010
+            assert seq_resp == conc_resp
 
     def compare_seq_concurrent_duration(self):
         '''
@@ -62,11 +72,15 @@ class TestBaseConcurrency(TestBase):
 
         # Get the response for a batch request.
         batch_requests = self.make_multiple_batch_request([sleep_2_seconds, sleep_1_second, sleep_2_seconds])
-        seq_duration = int(batch_requests._headers.get(br_settings.DURATION_HEADER_NAME)[1])
+        seq_duration = float(
+            batch_requests._headers.get(_settings.DURATION_HEADER_NAME)[1]
+        )
 
         # Update the executor settings.
-        br_settings.executor = self.get_executor()
+        _settings.executor = self.get_executor()
         concurrent_batch_requests = self.make_multiple_batch_request([sleep_2_seconds, sleep_1_second, sleep_2_seconds])
-        concurrency_duration = int(concurrent_batch_requests._headers.get(br_settings.DURATION_HEADER_NAME)[1])
+        concurrency_duration = float(
+            concurrent_batch_requests._headers.get(_settings.DURATION_HEADER_NAME)[1]
+        )
 
         self.assertLess(concurrency_duration, seq_duration, "Concurrent requests are slower than running them in sequence.")
