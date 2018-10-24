@@ -1,0 +1,43 @@
+Version 0.2.1+orm.1
+# Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Pep 440](https://www.python.org/dev/peps/pep-0440/),
+which is generally [compatible](https://www.python.org/dev/peps/pep-0440/#semantic-versioning)
+with [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+### Added
+### Changed
+### Deprecated
+### Fixed
+### Removed
+### Security
+
+## [0.2.1+orm.1] - 2018-10-24
+### Fixed
+- Add this changelog
+- Handle bodies that don't deserialize more cleanly (SPIDR-634)
+
+## [0.2.0+orm.1] - 2018-07-13
+### Added
+- Make compatible with Django 1.7-1.11, add features for O'Reilly (SPIDR-360)
+- Mostly compatible with Django 2.0 (SPIDR-360)
+- Adds several new features for O'Reilly use: (SPIDR-360)
+  - Custom batch response status code
+  - Handles 404 sub-responses
+  - Cleaned up implementation of concurrent executors
+  - Cleaned up/refactored views and utils
+  - Allows singly or doubly (previous) JSON encoded input bodies
+  - Allows for deserialization of sub-responses, in order
+    to remove doubly encoded responses in batch response
+  - Adds timeout handling, with HTTP 408 status, for concurrent
+    sub-requests
+
+## [0.1.1] - 2016-03-12
+
+[Unreleased]: https://github.com/oreillymedia/django-batch-requests/compare/v0.2.1+orm.1...HEAD
+[0.2.1+orm.1]: https://github.com/oreillymedia/django-batch-requests/compare/v0.2.0+orm.1...v0.2.1+orm.1
+[0.2.0+orm.1]: https://github.com/oreillymedia/django-batch-requests/compare/v0.1.1...v0.2.1+orm.1
+[0.1.1]: https://github.com/oreillymedia/keep-a-changelog/compare/v0.1.0...v0.1.1
