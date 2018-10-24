@@ -118,6 +118,11 @@ class ExceptionView(View):
         raise Exception("exception")
 
 
+class RateLimitedView(View):
+    def get(self, request, *args, **kwargs):
+        return HttpResponse(content='Rate Limited', status=429)
+
+
 class SleepingView(View):
 
     '''

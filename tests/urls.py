@@ -1,8 +1,13 @@
 from django.conf.urls import url
 
 from batch_requests.views import handle_batch_requests
-from tests.test_views import SimpleView, EchoHeaderView, ExceptionView,\
-    SleepingView
+from tests.test_views import (
+    EchoHeaderView,
+    ExceptionView,
+    RateLimitedView,
+    SimpleView,
+    SleepingView,
+)
 
 
 urlpatterns = [
@@ -10,5 +15,6 @@ urlpatterns = [
     url(r'^echo/', EchoHeaderView.as_view()),
     url(r'^exception/', ExceptionView.as_view()),
     url(r'^sleep/', SleepingView.as_view()),
+    url(r'^rate-limited/', RateLimitedView.as_view()),
     url(r'^api/v1/batch/', handle_batch_requests),
 ]

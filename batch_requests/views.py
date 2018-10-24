@@ -77,7 +77,10 @@ def timeout_result_handler(future, timeout=None):
 def handle_sub_response_body(response):
     body = getattr(response, "rendered_content", None) or response.content
     if body and _settings.DESERIALIZE_RESPONSES:
-        return json.loads(body)
+        try:
+            return json.loads(body)
+        except ValueError:
+            pass  # fall through and just return body
 
     return body
 
@@ -94,6 +97,10 @@ def construct_duration_header(duration):
     return duration.seconds + (duration.microseconds / 1000000.0)
 
 
+def add_duration_header(resp, start, end):
+    resp["headers"][DURATION_HEADER_NAME] = construct_duration_header(end - start)
+
+
 def get_response(wsgi_request):
     '''
         Given a WSGI request, makes a call to a corresponding view
@@ -104,7 +111,7 @@ def get_response(wsgi_request):
     # Get the view / handler for this request
     try:
         view, args, kwargs = resolve(wsgi_request.path_info)
-    except Resolver404 as exc:
+    except Resolver404:
         resp = HttpResponseNotFound()
 
     if resp is None:
@@ -126,8 +133,7 @@ def get_response(wsgi_request):
 
     # Check if we need to send across the duration header.
     if _settings.ADD_DURATION_HEADER:
-        duration = datetime.now() - service_start_time
-        d_resp["headers"][DURATION_HEADER_NAME] = construct_duration_header(duration)
+        add_duration_header(d_resp, service_start_time, datetime.now())
 
     return d_resp
 
@@ -179,8 +185,7 @@ def execute_requests(wsgi_requests):
         Execute the requests either sequentially or in parallel based on parallel
         execution setting.
     '''
-    executor = _settings.executor
-    return executor.execute(
+    return _settings.executor.execute(
         wsgi_requests, get_response, result_handler=timeout_result_handler
     )
 
@@ -206,16 +211,17 @@ def handle_batch_requests(request, *args, **kwargs):
         return HttpResponseBadRequest(content=six.text_type(brx))
 
     batch_end_time = datetime.now()
+    BATCH_RESPONSE_STATUS = _settings.BATCH_RESPONSE_STATUS
 
     # Evrything's done, return the response.
     resp_kwargs = {
         "content": json.dumps(response, cls=BytesEncoder),
         "content_type": "application/json",
-        "status": _settings.BATCH_RESPONSE_STATUS,
+        "status": BATCH_RESPONSE_STATUS,
     }
 
     # handle STDLIB unknown reason phrases
-    batch_reason = UNKNOWN_STATUSES.get(_settings.BATCH_RESPONSE_STATUS, None)
+    batch_reason = UNKNOWN_STATUSES.get(BATCH_RESPONSE_STATUS, None)
     if batch_reason:
         resp_kwargs["reason"] = batch_reason
 

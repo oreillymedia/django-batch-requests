@@ -6,6 +6,8 @@
 '''
 import json
 
+import mock
+import pytest
 from django.test import TestCase
 
 from tests import ensure_text_content
@@ -89,14 +91,47 @@ class TestBadBatchRequest(TestCase):
         '''
             Make a batch request to a view that raises exception.
         '''
-        resp = ensure_text_content(
-            self.client.post(
-                "/api/v1/batch/",
-                json.dumps([{"method": "get", "url": "/exception/"}]),
-                content_type="application/json"
+        with self.settings(DEBUG=True):
+            resp = ensure_text_content(
+                self.client.post(
+                    "/api/v1/batch/",
+                    json.dumps([
+                        {"method": "get", "url": "/exception/"},
+                        {"method": "get", "url": "/rate-limited/"},
+                        {"method": "get", "url": "/views/"},
+                    ]),
+                    content_type="application/json"
+                )
             )
-        )
 
-        resp = json.loads(resp.text)[0]
-        self.assertEqual(resp['status_code'], 500, "Exceptions should return 500.")
-        self.assertEqual(resp['body'].lower(), "exception", "Exception handling is broken!")
+        assert resp.status_code == 200
+        responses = json.loads(resp.text)
+
+        expected = {
+            0: (500, 'exception'),
+            1: (429, 'rate limited'),
+            2: (200, 'success!'),
+        }
+
+        for index, expects in expected.items():
+            resp = responses[index]
+            exp_status, exp_explanation = expects
+            assert resp['status_code'] == exp_status
+            assert resp['body'].lower() == exp_explanation
+
+    @pytest.mark.regression
+    def test_exception_view_with_deserialization(self):
+        """Make batch request to exception endpoint AND try to deserialize the response"""
+        with mock.patch('batch_requests.views._settings.DESERIALIZE_RESPONSES') as mock_des:
+            mock_des.return_value = True
+            resp = ensure_text_content(
+                self.client.post(
+                    "/api/v1/batch/",
+                    json.dumps([{"method": "get", "url": "/exception/"}]),
+                    content_type="application/json"
+                )
+            )
+
+        assert resp.status_code == 200
+        responses = json.loads(resp.text)
+        assert responses[0]['status_code'] == 500

@@ -7,6 +7,7 @@ from __future__ import absolute_import, unicode_literals
 
 from abc import ABCMeta
 
+from concurrent.futures._base import Executor as BaseExecutor, Future
 from concurrent.futures.process import ProcessPoolExecutor
 from concurrent.futures.thread import ThreadPoolExecutor
 
@@ -15,16 +16,30 @@ def default_result_handler(future, *args, **kwargs):
     return future.result()
 
 
+class SequentialPoolExecutor(BaseExecutor):
+    def __init__(self, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs
+
+    def submit(self, fn, *args, **kwargs):
+        f = Future()
+        try:
+            result = fn(*args, **kwargs)
+        except BaseException as exc:
+            f.set_exception(exc)
+            # Break a reference cycle with the exception 'exc', copied from stdlib
+            self = None  # noqa: W0612
+        else:
+            f.set_result(result)
+        return f
+
+
 class Executor(object):
-    '''
-        Based executor class to encapsulate the job execution.
-    '''
+    '''Based executor class to encapsulate the job execution.'''
     __metaclass__ = ABCMeta
 
     def __init__(self, num_workers, timeout=None):
-        '''
-            Create a thread pool for concurrent execution with specified number of workers.
-        '''
+        '''Create a pool for (maybe) concurrent execution with specified number of workers.'''
         self.num_workers = num_workers
         self.timeout = timeout
 
@@ -34,40 +49,27 @@ class Executor(object):
     def execute(self, requests, resp_generator,
                 result_handler=default_result_handler,
                 *args, **kwargs):
-        '''
-            Calls the resp_generator for all the requests in parallel in an asynchronous way.
-        '''
-        pool = self.get_executor_pool()
-        timeout = self.timeout
-        return [
-            result_handler(future, timeout) for future in [
-                pool.submit(resp_generator, req, *args, **kwargs)
-                for req in requests
+        '''Calls the resp_generator for all the requests in parallel in an asynchronous way'''
+        with self.get_executor_pool() as pool:
+            futures = [
+                pool.submit(resp_generator, r, *args, **kwargs)
+                for r in requests
             ]
-        ]
+
+        timeout = self.timeout
+        return [result_handler(f, timeout) for f in futures]
 
 
 class SequentialExecutor(Executor):
-    '''
-        Executor for executing the requests sequentially.
-    '''
-
-    def execute(self, requests, resp_generator, *args, **kwargs):
-        '''
-            Calls the resp_generator for all the requests in sequential order.
-        '''
-        return [resp_generator(request) for request in requests]
+    '''An implementation of executor using no parallelism.'''
+    executor_cls = SequentialPoolExecutor
 
 
 class ThreadBasedExecutor(Executor):
-    '''
-        An implementation of executor using threads for parallelism.
-    '''
+    '''An implementation of executor using threads for parallelism.'''
     executor_cls = ThreadPoolExecutor
 
 
 class ProcessBasedExecutor(Executor):
-    '''
-        An implementation of executor using process(es) for parallelism.
-    '''
+    '''An implementation of executor using process(es) for parallelism.'''
     executor_cls = ProcessPoolExecutor
